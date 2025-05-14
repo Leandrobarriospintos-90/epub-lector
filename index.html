@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lector EPUB</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
+    <style>
+        /* Estilos base */
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 80vh;
+            background-color: #f0f0f0; /* Default light mode background */
+            color: #333; /* Default light mode text color */
+            transition: background-color 0.3s ease, color 0.3s ease; /* Smooth transition */
+        }
+
+        /* Estilos para Modo Oscuro */
+        body.dark-mode {
+            background-color: #1a202c; /* Dark mode background */
+            color: #e2e8f0; /* Dark mode text color */
+        }
+
+        .bg-white { /* Override Tailwind for dark mode */
+            background-color: #ffffff;
+        }
+        .dark-mode .bg-white {
+             background-color: #2d3748; /* Darker background for cards/containers */
+        }
+
+        .text-gray-800 { /* Override Tailwind for dark mode */
+            color: #333;
+        }
+         .dark-mode .text-gray-800 {
+            color: #e2e8f0;
+        }
+
+        .text-gray-700 { /* Override Tailwind for dark mode */
+            color: #4a5568;
+        }
+        .dark-mode .text-gray-700 {
+            color: #cbd5e0;
+        }
+
+         .text-gray-500 { /* Override Tailwind for dark mode */
+            color: #a0aec0;
+         }
+        .dark-mode .text-gray-500 {
+            color: #718096;
+        }
+
+
+        .border-gray-200 { border-color: #e2e8f0; }
+        .dark-mode .border-gray-200 { border-color: #4a5568; }
+
+        .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .dark-mode .shadow-md { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); }
+
+
+        #viewer {
+            /* Adjusted height to accommodate controls below */
+            height: calc(100vh - 400px); /* Give more space below for controls */
+            border: 1px solid #e5e7eb;
+            overflow-y: auto;
+            background-color: #f9fafb; /* Default light mode viewer background */
+            transition: background-color 0.3s ease;
+            margin-bottom: 1.5rem; /* Add margin below the viewer */
+        }
+        .dark-mode #viewer {
+            background-color: #2d3748; /* Dark mode viewer background */
+        }
+
+        /* Specific styles for elements inside the viewer managed by EPUB.js */
+        /* These might need to be applied via EPUB.js themes for full control */
+        .dark-mode #viewer iframe body {
+            color: #e2e8f0 !important;
+        }
+
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #ffffff; /* Default light mode modal background */
+            margin: auto;
+            padding: 2rem;
+            border: 1px solid #d1d5db;
+            width: 90%;
+            max-width: 450px;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            transition: background-color 0.3s ease;
+        }
+        .dark-mode .modal-content {
+            background-color: #2d3748; /* Dark mode modal background */
+            border-color: #4a5568;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+            text-align: center;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+            border: 1px solid transparent;
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.5);
+        }
+        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+            border: 1px solid transparent;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+        .btn-link {
+            background-color: transparent;
+            color: #2563eb;
+            font-weight: 500;
+            padding: 0.5rem;
+        }
+        .btn-link:hover {
+            text-decoration: underline;
+            color: #1d4ed8;
+        }
+         .dark-mode .btn-link {
+             color: #639fff;
+         }
+         .dark-mode .btn-link:hover {
+             color: #428bff;
+         }
+
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s, color 0.2s;
+            background-color: #ffffff; /* Default light mode input background */
+            color: #333; /* Default light mode input text */
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+        .dark-mode .form-input {
+            background-color: #4a5568; /* Dark mode input background */
+            border-color: #6b7280;
+            color: #e2e8f0; /* Dark mode input text */
+        }
+        .dark-mode .form-input:focus {
+            border-color: #639fff;
+            box-shadow: 0 0 0 3px rgba(99, 153, 255, 0.3);
+        }
+
+        .error-message {
+            display: none;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+         .dark-mode .error-message {
+             background-color: #451a1a;
+             color: #fca5a5;
+             border-color: #f87171;
+         }
+
+        .success-message {
+            display: none;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background-color: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+         .dark-mode .success-message {
+             background-color: #14532d;
+             color: #86efac;
+             border-color: #4ade80;
+         }
+
+        #viewer canvas {
+            max-width: 100%;
+            height: auto !important;
+        }
+
+        /* Styles for the mode toggle button */
+        #modeToggle {
+            background-color: #cbd5e0; /* Light mode button background */
+            color: #2d3748; /* Light mode button text */
+            padding: 0.5rem 1rem;
+            border-radius: 9999px; /* Pill shape */
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        #modeToggle:hover {
+            background-color: #a0aec0;
+        }
+
+        .dark-mode #modeToggle {
+            background-color: #4a5568; /* Dark mode button background */
+            color: #e2e8f0; /* Dark mode button text */
+        }
+         .dark-mode #modeToggle:hover {
+             background-color: #6b7280;
+         }
+
+         /* Styles for the container holding font controls */
+         #fontControlsContainer {
+             display: flex; /* Arrange font control groups side-by-side */
+             justify-content: center; /* Center the grouped controls */
+             align-items: center;
+             gap: 1.5rem; /* Space between the two font control groups */
+             margin-bottom: 1rem; /* Margin below the entire font control section */
+             flex-wrap: wrap; /* Allow wrapping on smaller screens */
+         }
+          /* Styles for the background of individual font control groups */
+         #fontControlsGroup, /* New ID for the group containing size and alignment */
+         #fontFamilyControls {
+             background-color: #f7fafc; /* Light mode background */
+             padding: 0.75rem;
+             border-radius: 0.5rem;
+             display: flex; /* Ensure flex layout within each group */
+             align-items: center;
+             gap: 0.75rem; /* Spacing between items within each group */
+         }
+         .dark-mode #fontControlsGroup,
+         .dark-mode #fontFamilyControls {
+             background-color: #2d3748; /* Dark mode background */
+         }
+
+
+         /* Styles for the navigation controls (superimposed) */
+         #navigation {
+             position: absolute;
+             z-index: 10; /* Ensure controls are above the viewer content */
+             top: 0; /* Position at the top */
+             bottom: 0; /* Extend to the bottom */
+             left: 0; /* Position at the left edge */
+             right: 0; /* Position at the right edge */
+             display: flex;
+             justify-content: space-between; /* Space out buttons */
+             align-items: center;
+             width: 100%; /* Take full width of container */
+             background-color: transparent; /* No background */
+             padding: 0 1rem; /* Add padding on sides */
+             opacity: 0.5; /* 50% transparency */
+             transition: opacity 0.3s ease;
+             pointer-events: none; /* Allow clicks to pass through the div */
+         }
+         #navigation:hover {
+             opacity: 1; /* Full opacity on hover */
+         }
+
+         /* Target the buttons specifically within the navigation div */
+         #navigation button {
+             background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent background for buttons */
+             color: #333; /* Button text color */
+             padding: 8px 12px; /* Smaller padding for buttons */
+             border-radius: 5px; /* Rounded corners */
+             border: none;
+             cursor: pointer;
+             font-size: 1.2em; /* Smaller font size for arrows */
+             transition: background-color 0.2s ease;
+             pointer-events: auto; /* Re-enable clicks for the buttons */
+         }
+
+         .dark-mode #navigation button {
+             background-color: rgba(45, 55, 72, 0.8); /* Dark mode semi-transparent background */
+             color: #e2e8f0; /* Dark mode button text color */
+         }
+
+         #navigation button:hover {
+             background-color: rgba(200, 200, 200, 0.9); /* Slightly less transparent on hover */
+         }
+         .dark-mode #navigation button:hover {
+             background-color: rgba(74, 85, 104, 0.9); /* Dark mode hover */
+         }
+
+
+         #navigation span {
+             /* Hide the location text in this layout */
+             display: none;
+         }
+
+
+         /* Styles for the container wrapping viewer and superimposed controls */
+         #viewerContainer {
+             position: relative; /* Needed for absolute positioning of children */
+             margin-bottom: 1.5rem; /* Add some space below the viewer area */
+         }
+
+         /* Styles for the text alignment controls */
+         #textAlignControls {
+             display: flex;
+             align-items: center;
+             gap: 0.5rem; /* Smaller gap between alignment buttons */
+         }
+         #textAlignControls button {
+             padding: 0.5rem 0.75rem; /* Smaller padding for alignment buttons */
+             font-size: 0.875rem; /* Smaller font size */
+         }
+
+         /* Adjustments for smaller screens */
+         @media (max-width: 768px) {
+              #fontControlsContainer {
+                 gap: 1rem; /* Smaller gap between groups on small screens */
+                 margin-bottom: 0.75rem;
+             }
+             #fontControlsGroup,
+             #fontFamilyControls {
+                 padding: 0.5rem; /* Smaller padding on small screens */
+                 gap: 0.5rem; /* Smaller space within groups */
+             }
+              .btn-sm {
+                 padding: 0.3rem 0.6rem; /* Smaller padding for buttons */
+                 font-size: 0.75rem; /* Smaller font size */
+             }
+              #fontControlsGroup span,
+              #fontFamilyControls span {
+                 font-size: 0.75rem; /* Smaller font size for text */
+             }
+
+             #navigation {
+                 padding: 0 0.5rem; /* Smaller side padding on small screens */
+             }
+             #navigation button {
+                 padding: 6px 10px; /* Even smaller padding for nav buttons */
+                 font-size: 1em; /* Even smaller font size for arrows */
+             }
+
+             #textAlignControls button {
+                 padding: 0.4rem 0.6rem; /* Even smaller padding for alignment buttons */
+                 font-size: 0.75rem; /* Even smaller font size */
+             }
+         }
+
+
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">Iniciar Sesión</h2>
+            <form id="loginForm">
+                <div class="mb-4">
+                    <label for="loginUsername" class="block text-sm font-medium text-gray-700 mb-1">Usuario:</label>
+                    <input type="text" id="loginUsername" name="username" class="form-input" required>
+                </div>
+                <div class="mb-6">
+                    <label for="loginPassword" class="block text-sm font-medium text-gray-700 mb-1">Contraseña:</label>
+                    <input type="password" id="loginPassword" name="password" class="form-input" required>
+                </div>
+                <button type="submit" class="w-full btn btn-primary mb-4">Ingresar</button>
+            </form>
+            <div id="login-error-message" class="error-message">
+                </div>
+            <p class="text-center text-sm text-gray-600 mt-4">
+                ¿No tienes una cuenta?
+                <button id="showRegisterModal" class="btn-link">Regístrate aquí</button>
+            </p>
+        </div>
+    </div>
+
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">Crear Cuenta</h2>
+            <form id="registerForm">
+                <div class="mb-4">
+                    <label for="registerUsername" class="block text-sm font-medium text-gray-700 mb-1">Nombre de Usuario:</label>
+                    <input type="text" id="registerUsername" name="registerUsername" class="form-input" required>
+                </div>
+                <div class="mb-4">
+                    <label for="registerPassword" class="block text-sm font-medium text-gray-700 mb-1">Contraseña:</label>
+                    <input type="password" id="registerPassword" name="registerPassword" class="form-input" required>
+                </div>
+                <div class="mb-6">
+                    <label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-1">Confirmar Contraseña:</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" required>
+                </div>
+                <button type="submit" class="w-full btn btn-primary mb-4">Registrarme</button>
+            </form>
+            <div id="register-error-message" class="error-message">
+                </div>
+            <div id="register-success-message" class="success-message">
+                </div>
+            <p class="text-center text-sm text-gray-600 mt-4">
+                ¿Ya tienes una cuenta?
+                <button id="showLoginModalFromRegister" class="btn-link">Inicia sesión</button>
+            </p>
+        </div>
+    </div>
+
+    <div id="readerApp" class="hidden container mx-auto p-4 md:p-8">
+        <header class="mb-8 p-6 bg-white rounded-lg shadow-md flex flex-col sm:flex-row justify-between items-center">
+            <h1 class="text-3xl font-bold text-blue-600 mb-4 sm:mb-0">Lector de EPUB</h1>
+            <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <span id="welcomeMessage" class="text-gray-700 font-medium"></span>
+                <input type="file" id="epubFile" accept=".epub" class="block w-full max-w-xs text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-100 file:text-blue-700
+                    hover:file:bg-blue-200 cursor-pointer
+                "/>
+                 <button id="modeToggle">Modo Oscuro</button>
+                 <button id="logoutButton" class="btn btn-secondary w-full sm:w-auto">Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <main id="mainContent" class="bg-white p-6 rounded-lg shadow-md">
+
+            <div id="viewerContainer" class="relative">
+                <div id="viewer" class="w-full bg-gray-50 rounded-md p-4 text-center text-gray-500">
+                    <p id="viewerPlaceholder">Carga un archivo EPUB para comenzar a leer.</p>
+                </div>
+
+                <div id="navigation" class="absolute">
+                    <button id="prev" class="btn btn-primary">&lt;</button>
+                    <button id="next" class="btn btn-primary">&gt;</button>
+                </div>
+            </div>
+
+            <div id="fontControlsContainer" class="flex justify-center items-center gap-6 my-4">
+                <div id="fontFamilyControls" class="flex items-center gap-3 p-2 bg-gray-100 rounded-md">
+                    <button id="fontFamilySansSerif" class="btn btn-primary btn-sm">Sans</button>
+                     <span class="text-sm text-gray-700">Fuente</span>
+                    <button id="fontFamilySerif" class="btn btn-secondary btn-sm">Serif</button>
+                 </div>
+
+                <div id="fontControlsGroup" class="flex items-center gap-3 p-2 bg-gray-100 rounded-md">
+                     <div id="fontSizeControls" class="flex items-center gap-3">
+                        <button id="fontSizeDecrease" class="btn btn-secondary btn-sm">A-</button>
+                        <span class="text-sm text-gray-700">Tamaño</span>
+                        <button id="fontSizeIncrease" class="btn btn-secondary btn-sm">A+</button>
+                    </div>
+
+                    <div id="textAlignControls" class="flex items-center gap-2">
+                         <span class="text-sm text-gray-700">Alineación</span>
+                        <button id="textAlignLeft" class="btn btn-secondary btn-sm">Izq</button>
+                        <button id="textAlignRight" class="btn btn-secondary btn-sm">Der</button>
+                        <button id="textAlignJustify" class="btn btn-primary btn-sm">Jus</button>
+                    </div>
+                </div>
+            </div>
+
+             <div id="locationDisplayContainer" class="text-center text-sm text-gray-700 mt-4">
+                 <span id="location"></span>
+             </div>
+
+
+        </main>
+
+        <footer class="mt-8 text-center text-sm text-gray-500">
+            <p>&copy; <span id="year"></span> Lector EPUB. Todos los derechos reservados.</p>
+        </footer>
+    </div>
+
+    <script>
+        // --- Variables Globales ---
+        const loginModal = document.getElementById('loginModal');
+        const registerModal = document.getElementById('registerModal');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const loginErrorMessage = document.getElementById('login-error-message');
+        const registerErrorMessage = document.getElementById('register-error-message');
+        const registerSuccessMessage = document.getElementById('register-success-message');
+        const readerApp = document.getElementById('readerApp');
+        const logoutButton = document.getElementById('logoutButton');
+        const epubFileInput = document.getElementById('epubFile');
+        const viewer = document.getElementById('viewer');
+        const viewerPlaceholder = document.getElementById('viewerPlaceholder');
+        const prevButton = document.getElementById('prev');
+        const nextButton = document.getElementById('next');
+        const locationDisplay = document.getElementById('location'); // Location span is now outside navigation div
+        const showRegisterModalButton = document.getElementById('showRegisterModal');
+        const showLoginModalFromRegisterButton = document.getElementById('showLoginModalFromRegister');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const modeToggle = document.getElementById('modeToggle'); // Get the mode toggle button
+        const viewerContainer = document.getElementById('viewerContainer'); // Get the viewer container
+        const fontControlsContainer = document.getElementById('fontControlsContainer'); // Get the container for font controls
+        const fontControlsGroup = document.getElementById('fontControlsGroup'); // Get the group for size and alignment
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Controles de fuente
+        const fontSizeDecreaseButton = document.getElementById('fontSizeDecrease');
+        const fontSizeIncreaseButton = document.getElementById('fontSizeIncrease');
+        const fontFamilySansSerifButton = document.getElementById('fontFamilySansSerif');
+        const fontFamilySerifButton = document.getElementById('fontFamilySerif');
+
+        // Controles de alineación de texto
+        const textAlignLeftButton = document.getElementById('textAlignLeft');
+        const textAlignRightButton = document.getElementById('textAlignRight');
+        const textAlignJustifyButton = document.getElementById('textAlignJustify');
+
+        let book = null;
+        let rendition = null;
+        let currentFontSize = parseInt(localStorage.getItem('epubReaderFontSizePercent')) || 100; // Porcentaje
+        let currentFontFamily = localStorage.getItem('epubReaderFontFamily') || 'sans-serif'; // 'sans-serif' o 'serif'
+        let currentMode = localStorage.getItem('epubReaderMode') || 'light'; // 'light' or 'dark'
+        let currentTextAlign = localStorage.getItem('epubReaderTextAlign') || 'justify'; // Default text alignment
+
+        // --- Almacenamiento simulado de usuarios ---
+        let users = JSON.parse(localStorage.getItem('epubReaderUsers')) || [];
+        if (!users.find(user => user.username === 'user')) {
+            users.push({ username: 'user', password: 'password' });
+            localStorage.setItem('epubReaderUsers', JSON.stringify(users));
+        }
+
+        // --- Funciones Auxiliares para Modales y Mensajes ---
+        function openModal(modalElement) {
+            modalElement.style.display = 'flex';
+        }
+        function closeModal(modalElement) {
+            modalElement.style.display = 'none';
+        }
+        function displayMessage(element, message, isSuccess = false) {
+            element.textContent = message;
+            // Asegurar que las clases base de Tailwind para mensajes se apliquen correctamente
+            element.className = isSuccess ? 'success-message' : 'error-message';
+            if (isSuccess) {
+                 // No es necesario re-añadir clases si .success-message ya las tiene definidas en <style>
+            } else {
+                // No es necesario re-añadir clases si .error-message ya las tiene definidas en <style>
+            }
+            element.style.display = 'block';
+
+            if (isSuccess) {
+                setTimeout(() => {
+                    element.style.display = 'none';
+                }, 3000);
+            }
+        }
+        function hideMessage(element) {
+            element.style.display = 'none';
+            element.textContent = '';
+        }
+
+        // --- Lógica de Autenticación ---
+        showRegisterModalButton.addEventListener('click', () => {
+            closeModal(loginModal);
+            hideMessage(loginErrorMessage);
+            registerForm.reset();
+            openModal(registerModal);
+        });
+
+        showLoginModalFromRegisterButton.addEventListener('click', () => {
+            closeModal(registerModal);
+            hideMessage(registerErrorMessage);
+            hideMessage(registerSuccessMessage);
+            loginForm.reset();
+            openModal(loginModal);
+        });
+
+        registerForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const username = event.target.registerUsername.value.trim();
+            const password = event.target.registerPassword.value;
+            const confirmPassword = event.target.confirmPassword.value;
+
+            hideMessage(registerErrorMessage);
+            hideMessage(registerSuccessMessage);
+
+            if (!username || !password || !confirmPassword) {
+                displayMessage(registerErrorMessage, 'Todos los campos son obligatorios.');
+                return;
+            }
+            if (password.length < 6) {
+                displayMessage(registerErrorMessage, 'La contraseña debe tener al menos 6 caracteres.');
+                return;
+            }
+            if (password !== confirmPassword) {
+                displayMessage(registerErrorMessage, 'Las contraseñas no coinciden.');
+                return;
+                }
+            if (users.find(user => user.username === username)) {
+                displayMessage(registerErrorMessage, 'El nombre de usuario ya existe.');
+                return;
+            }
+
+            users.push({ username, password });
+            localStorage.setItem('epubReaderUsers', JSON.stringify(users));
+            displayMessage(registerSuccessMessage, '¡Registro exitoso! Ahora puedes iniciar sesión.', true);
+            registerForm.reset();
+            setTimeout(() => {
+                closeModal(registerModal);
+                openModal(loginModal);
+            }, 2000);
+        });
+
+        loginForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const username = event.target.username.value;
+            const password = event.target.password.value;
+            hideMessage(loginErrorMessage);
+
+            const foundUser = users.find(user => user.username === username && user.password === password);
+            if (foundUser) {
+                closeModal(loginModal);
+                readerApp.classList.remove('hidden');
+                welcomeMessage.textContent = `Bienvenido, ${foundUser.username}!`;
+                localStorage.setItem('loggedInUser', foundUser.username);
+            } else {
+                displayMessage(loginErrorMessage, 'Usuario o contraseña incorrectos.');
+            }
+        });
+
+        logoutButton.addEventListener('click', function() {
+            readerApp.classList.add('hidden');
+            welcomeMessage.textContent = '';
+            localStorage.removeItem('loggedInUser');
+            openModal(loginModal);
+            loginForm.reset();
+            hideMessage(loginErrorMessage);
+
+            if (rendition) rendition.destroy();
+            if (book) book.destroy();
+            rendition = null;
+            book = null;
+            viewer.innerHTML = ''; // Limpiar el contenido del visor
+            viewer.appendChild(viewerPlaceholder); // Restaurar el placeholder
+            viewerPlaceholder.textContent = 'Carga un archivo EPUB para comenzar a leer.';
+            viewerPlaceholder.style.display = 'block';
+            locationDisplay.textContent = '';
+            epubFileInput.value = ''; // Resetear el input del archivo
+        });
+
+        // --- Lógica de Control de Tamaño de Fuente ---
+        function applyCurrentFontSize() {
+            if (rendition) {
+                rendition.themes.fontSize(currentFontSize + '%');
+            }
+        }
+
+        fontSizeDecreaseButton.addEventListener('click', () => {
+            if (currentFontSize > 50) {
+                currentFontSize -= 10;
+                localStorage.setItem('epubReaderFontSizePercent', currentFontSize);
+                applyCurrentFontSize();
+            }
+        });
+
+        fontSizeIncreaseButton.addEventListener('click', () => {
+            if (currentFontSize < 200) {
+                currentFontSize += 10;
+                localStorage.setItem('epubReaderFontSizePercent', currentFontSize);
+                applyCurrentFontSize();
+            }
+        });
+
+        // --- Lógica de Control de Tipo de Fuente ---
+        function applyCurrentFontFamily() {
+            if (rendition) {
+                rendition.themes.font(currentFontFamily);
+            }
+            // Actualizar estado visual de los botones
+            if (currentFontFamily === 'serif') {
+                fontFamilySerifButton.classList.replace('btn-secondary', 'btn-primary');
+                fontFamilySansSerifButton.classList.replace('btn-primary', 'btn-secondary');
+            } else { // 'sans-serif'
+                fontFamilySansSerifButton.classList.replace('btn-secondary', 'btn-primary');
+                fontFamilySerifButton.classList.replace('btn-primary', 'btn-secondary');
+            }
+             // Asegurar que btn-sm no se pierda si no está en btn-primary/btn-secondary por defecto
+            fontFamilySerifButton.classList.add('btn-sm');
+            fontFamilySansSerifButton.classList.add('btn-sm');
+        }
+
+        fontFamilySerifButton.addEventListener('click', () => {
+            if (currentFontFamily !== 'serif') {
+                currentFontFamily = 'serif';
+                localStorage.setItem('epubReaderFontFamily', currentFontFamily);
+                applyCurrentFontFamily();
+            }
+        });
+
+        fontFamilySansSerifButton.addEventListener('click', () => {
+            if (currentFontFamily !== 'sans-serif') {
+                currentFontFamily = 'sans-serif';
+                localStorage.setItem('epubReaderFontFamily', currentFontFamily);
+                applyCurrentFontFamily();
+            }
+        });
+
+        // --- Lógica de Control de Alineación de Texto ---
+        function applyCurrentTextAlign() {
+             if (rendition) {
+                 // Remove active class from all alignment buttons
+                 textAlignLeftButton.classList.replace('btn-primary', 'btn-secondary');
+                 textAlignRightButton.classList.replace('btn-primary', 'btn-secondary');
+                 textAlignJustifyButton.classList.replace('btn-primary', 'btn-secondary');
+
+                 // Apply the selected alignment
+                 rendition.themes.override('text-align', currentTextAlign);
+
+                 // Add active class to the current alignment button
+                 if (currentTextAlign === 'left') {
+                     textAlignLeftButton.classList.replace('btn-secondary', 'btn-primary');
+                 } else if (currentTextAlign === 'right') {
+                     textAlignRightButton.classList.replace('btn-secondary', 'btn-primary');
+                 } else if (currentTextAlign === 'justify') {
+                     textAlignJustifyButton.classList.replace('btn-secondary', 'btn-primary');
+                 }
+             }
+        }
+
+        textAlignLeftButton.addEventListener('click', () => {
+            currentTextAlign = 'left';
+            localStorage.setItem('epubReaderTextAlign', currentTextAlign);
+            applyCurrentTextAlign();
+        });
+
+        textAlignRightButton.addEventListener('click', () => {
+            currentTextAlign = 'right';
+            localStorage.setItem('epubReaderTextAlign', currentTextAlign);
+            applyCurrentTextAlign();
+        });
+
+        textAlignJustifyButton.addEventListener('click', () => {
+            currentTextAlign = 'justify';
+            localStorage.setItem('epubReaderTextAlign', currentTextAlign);
+            applyCurrentTextAlign();
+        });
+
+
+        // --- Lógica de Modo Oscuro/Claro ---
+        function applyCurrentMode() {
+            if (currentMode === 'dark') {
+                document.body.classList.add('dark-mode');
+                modeToggle.textContent = 'Modo Claro';
+                // Apply dark theme to EPUB.js rendition if it exists
+                 if (rendition) {
+                     rendition.themes.override('color', '#e2e8f0'); // Text color
+                     rendition.themes.override('background-color', '#2d3748'); // Background color
+                 }
+            } else {
+                document.body.classList.remove('dark-mode');
+                modeToggle.textContent = 'Modo Oscuro';
+                // Apply light theme to EPUB.js rendition if it exists
+                 if (rendition) {
+                     rendition.themes.override('color', '#333'); // Text color
+                     rendition.themes.override('background-color', '#f9fafb'); // Background color
+                 }
+            }
+        }
+
+        modeToggle.addEventListener('click', () => {
+            currentMode = currentMode === 'light' ? 'dark' : 'light';
+            localStorage.setItem('epubReaderMode', currentMode);
+            applyCurrentMode();
+        });
+
+
+        // --- Lógica del Lector de EPUB (usando EPUB.js) ---
+        epubFileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                if (window.FileReader) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        viewerPlaceholder.textContent = 'Cargando libro...';
+                        viewerPlaceholder.style.display = 'block';
+
+                        if (rendition) rendition.destroy();
+                        if (book) book.destroy();
+
+                        book = ePub(e.target.result);
+                        rendition = book.renderTo(viewer, {
+                            width: "100%",
+                            height: "100%",
+                            spread: "auto",
+                            flow: "paginated"
+                        });
+
+                        book.ready.then(() => {
+                            // Book is ready
+                        }).catch(err => {
+                            console.error("Error getting book ready:", err);
+                        });
+
+
+                        rendition.display().then(() => {
+                            viewerPlaceholder.style.display = 'none';
+                            applyCurrentFontSize(); // Aplicar tamaño de fuente guardado/actual
+                            applyCurrentFontFamily(); // Aplicar tipo de fuente guardado/actual
+                            applyCurrentTextAlign(); // Apply text alignment
+                            applyCurrentMode(); // Apply current mode to the rendition
+                            generateAndDisplayLocations();
+                        }).catch(err => {
+                            console.error("Error al mostrar el EPUB:", err);
+                            viewerPlaceholder.textContent = 'Error al cargar el EPUB. Intenta con otro archivo.';
+                            viewerPlaceholder.style.display = 'block';
+                        });
+
+                        rendition.on("relocated", location => {
+                            updateLocationDisplay(location);
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    displayMessage(loginErrorMessage, 'Tu navegador no soporta la API de FileReader.'); // Usar displayMessage
+                    viewerPlaceholder.textContent = 'Tu navegador no soporta la API de FileReader.';
+                }
+            }
+        });
+
+        function generateAndDisplayLocations() {
+            if (!book || !book.ready) return;
+            book.ready.then(() => {
+                return book.locations.generate(1650);
+            }).then(locations => {
+                // console.log("Locations generadas:", locations.length);
+                updateLocationDisplay();
+            }).catch(err => {
+                console.error("Error generando locations:", err);
+                updateLocationDisplay();
+            });
+        }
+
+        function updateLocationDisplay(locationCfi) {
+            if (!rendition || !book ) {
+                locationDisplay.textContent = 'Cargando...';
+                return;
+            }
+            const currentLocation = locationCfi || rendition.currentLocation();
+
+            if (currentLocation && currentLocation.start) {
+                const cfi = currentLocation.start.cfi;
+                let percentage = 0;
+                if (book.locations && typeof book.locations.percentageFromCfi === 'function') {
+                     percentage = book.locations.percentageFromCfi(cfi);
+                }
+
+                const currentPage = book.locations && typeof book.locations.locationFromCfi === 'function' ? book.locations.locationFromCfi(cfi) : null;
+                let displayedPage = currentPage ? `Pág. ${currentPage}` : '';
+
+                if (percentage > 0 && percentage <=1) {
+                    const percentStr = Math.round(percentage * 100);
+                    locationDisplay.textContent = `${displayedPage} (${percentStr}%)`.trim();
+                } else if (displayedPage) {
+                    locationDisplay.textContent = displayedPage;
+                } else {
+                    locationDisplay.textContent = 'Ubicación';
+                }
+            } else {
+                locationDisplay.textContent = 'Ubicación no disponible';
+            }
+        }
+
+        prevButton.addEventListener('click', () => rendition && rendition.prev());
+        nextButton.addEventListener('click', () => rendition && rendition.next());
+
+        window.addEventListener('resize', function() {
+            // El redimensionamiento de rendition es manejado por epub.js si width/height son porcentajes.
+            // Si se necesita un re-renderizado forzado en algunos casos:
+            // if (rendition && rendition.currentLocation()) {
+            //      rendition.display(rendition.currentLocation().start.cfi);
+            // }
+        });
+
+        // --- Inicialización ---
+        // Cargar preferencias de fuente (tamaño y familia)
+        currentFontSize = parseInt(localStorage.getItem('epubReaderFontSizePercent')) || 100;
+        currentFontFamily = localStorage.getItem('epubReaderFontFamily') || 'sans-serif';
+        currentMode = localStorage.getItem('epubReaderMode') || 'light'; // Load mode preference
+        currentTextAlign = localStorage.getItem('epubReaderTextAlign') || 'justify'; // Load text alignment preference
+
+        applyCurrentFontFamily(); // Aplicar estado inicial de botones de tipo de fuente
+        applyCurrentMode(); // Apply the saved mode on load
+        // Apply text alignment on initial load (before book is loaded)
+        // This will be reapplied when a book is loaded in epubFileInput listener
+        applyCurrentTextAlign();
+
+
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        if (loggedInUser) {
+            welcomeMessage.textContent = `Bienvenido, ${loggedInUser}!`;
+            readerApp.classList.remove('hidden');
+            // Las fuentes, alineación y el modo se aplicarán cuando se cargue un libro
+        } else {
+            openModal(loginModal);
+        }
+
+    </script>
+</body>
+</html>
